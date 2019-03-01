@@ -29,6 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
                                                   withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
                                                                   forImages:(NSArray<OSTuple<OSImageId *, NSData *> *> *)imageTuples;
 
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
+                                                  withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                                  forImagesHashes:(NSArray<OSTuple<OSImageId *, NSString *> *> *)imagesHashes;
+
 #pragma mark - Result Conversion
 
 - (NSDictionary<OSImageId *, NSSet<OSImageId *> *> *)dictionaryFromSimilarImagesResult:(NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImageTuples;
