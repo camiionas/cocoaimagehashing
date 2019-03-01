@@ -157,6 +157,16 @@ NS_ASSUME_NONNULL_BEGIN
                                                   withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
                                                                   forImages:(NSArray<OSTuple<OSImageId *, NSData *> *> *)images;
 
+#pragma mark - Concurrent, array based similarity search
+
+/**
+ * Given an NSArray of image hashes, create an NSArray of tuples containing similar images.
+ */
+
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithHashingQuality:(OSImageHashingQuality)imageHashingQuality
+                                                        withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                                        forImagesHashes:(NSArray<OSTuple<OSImageId *, NSString *> *> *)imagesHashes;
+
 #pragma mark - Array sorting with image similarity metrics for generic NSArrays
 
 /**
