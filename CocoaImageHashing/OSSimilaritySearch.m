@@ -74,6 +74,54 @@
     }];
 }
 
+- (void)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
+        withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+        forImageHashStreamHandler:(OSTuple<OSImageId *, NSString *> * (^)(void))imageHashStreamHandler
+                 forResultHandler:(void (^)(OSImageId * __unsafe_unretained leftHandImageId, OSImageId * __unsafe_unretained rightHandImageId))resultHandler
+{
+    NSAssert(imageHashStreamHandler, @"Image stream handler must not be nil");
+    NSAssert(resultHandler, @"Result handler must not be nil");
+    NSMutableArray<OSHashResultTuple<NSString *> *> __block *fingerPrintedTuples = [NSMutableArray new];
+    NSUInteger cpuCount = [[NSProcessInfo processInfo] processorCount];
+    dispatch_semaphore_t hashingSemaphore = dispatch_semaphore_create((long)cpuCount);
+    dispatch_group_t hashingDispatchGroup = dispatch_group_create();
+    id<OSImageHashingProvider> hashingProvider = OSImageHashingProviderFromImageHashingProviderId(imageHashingProviderId);
+    if (!hashingProvider) {
+        return;
+    }
+    OSSpinLock volatile __block lock = OS_SPINLOCK_INIT;
+    for (;;) {
+        OSTuple<NSString *, NSString *> __block *inputTuple = imageHashStreamHandler();
+        if (!inputTuple) {
+            break;
+        }
+        NSString * __unsafe_unretained imageHashString = inputTuple->_second;
+        if (!imageHashString) {
+            continue;
+        }
+        dispatch_semaphore_wait(hashingSemaphore, DISPATCH_TIME_FOREVER);
+        dispatch_group_async(hashingDispatchGroup, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            OSHashType hashResult = [imageHashString longLongValue];
+            if (hashResult != OSHashTypeError) {
+                OSHashResultTuple<NSString *> *resultTuple = [OSHashResultTuple new];
+                resultTuple->_first = inputTuple->_first;
+                resultTuple->_hashResult = hashResult;
+                OSSpinLockLock(&lock);
+                [fingerPrintedTuples addObject:resultTuple];
+                OSSpinLockUnlock(&lock);
+            }
+            dispatch_semaphore_signal(hashingSemaphore);
+        });
+    }
+    dispatch_group_wait(hashingDispatchGroup, DISPATCH_TIME_FOREVER);
+    [fingerPrintedTuples enumeratePairCombinationsUsingBlock:^(OSHashResultTuple * __unsafe_unretained leftHandTuple, OSHashResultTuple * __unsafe_unretained rightHandTuple) {
+        OSHashDistanceType hashDistance = OSHammingDistance(leftHandTuple->_hashResult, rightHandTuple->_hashResult);
+        if (hashDistance <= hashDistanceThreshold && hashDistance != OSHashTypeError) {
+            resultHandler(leftHandTuple->_first, rightHandTuple->_first);
+        }
+    }];
+}
+
 - (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
                                                   withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
                                                       forImageStreamHandler:(OSTuple<OSImageId *, NSData *> * (^)(void))imageStreamHandler
@@ -96,6 +144,26 @@
 
 - (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
                                                   withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                  forImageHashStreamHandler:(OSTuple<OSImageId *, NSString *> * (^)(void))imageHashStreamHandler
+{
+    NSAssert(imageHashStreamHandler, @"Image stream handler must not be nil");
+    NSMutableArray<OSTuple<NSString *, NSString *> *> *tuples = [NSMutableArray new];
+    OSSpinLock volatile __block lock = OS_SPINLOCK_INIT;
+    [self similarImagesWithProvider:imageHashingProviderId
+          withHashDistanceThreshold:hashDistanceThreshold
+          forImageHashStreamHandler:imageHashStreamHandler
+                   forResultHandler:^(OSImageId * __unsafe_unretained leftHandImageId, OSImageId * __unsafe_unretained rightHandImageId) {
+                       OSTuple<OSImageId *, OSImageId *> *tuple = [OSTuple tupleWithFirst:leftHandImageId
+                                                                                andSecond:rightHandImageId];
+                       OSSpinLockLock(&lock);
+                       [tuples addObject:tuple];
+                       OSSpinLockUnlock(&lock);
+                   }];
+    return tuples;
+}
+
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
+                                                  withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
                                                                   forImages:(NSArray<OSTuple<OSImageId *, NSData *> *> *)imageTuples
 {
     NSAssert(imageTuples, @"Image tuple array must not be nil");
@@ -111,6 +179,25 @@
             }];
     return result;
 }
+
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
+                                                  withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                                  forImagesHashes:(NSArray<OSTuple<OSImageId *, NSString *> *> *)imagesHashes
+{
+    NSAssert(imagesHashes, @"Hash tuple array must not be nil");
+    NSUInteger __block i = 0;
+    NSArray<OSTuple<OSImageId *, OSImageId *> *> *result = [self
+                                                            similarImagesWithProvider:imageHashingProviderId
+                                                            withHashDistanceThreshold:hashDistanceThreshold
+                                                            forImageHashStreamHandler:^OSTuple<OSImageId *, NSString *> * {
+                                                                if (i >= [imagesHashes count]) {
+                                                                    return nil;
+                                                                }
+                                                                return [imagesHashes objectAtIndex:i++];
+                                                            }];
+    return result;
+}
+
 
 #pragma mark - Result Conversion
 
