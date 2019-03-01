@@ -271,6 +271,27 @@
     return result;
 }
 
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithHashingQuality:(OSImageHashingQuality)imageHashingQuality
+                                                        withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                                        forImagesHashes:(NSArray<OSTuple<OSImageId *, NSString *> *> *)imagesHashes
+{
+    OSImageHashingProviderId providerId = OSImageHashingProviderIdForHashingQuality(imageHashingQuality);
+    NSArray<OSTuple<OSImageId *, OSImageId *> *> *result = [self similarImagesWithProvider:providerId
+                                                                 withHashDistanceThreshold:hashDistanceThreshold
+                                                                                 forImagesHashes:imagesHashes];
+    return result;
+}
+
+- (NSArray<OSTuple<OSImageId *, OSImageId *> *> *)similarImagesWithProvider:(OSImageHashingProviderId)imageHashingProviderId
+                                                  withHashDistanceThreshold:(OSHashDistanceType)hashDistanceThreshold
+                                                                  forImagesHashes:(NSArray<OSTuple<OSImageId *, NSString *> *> *)imagesHashes
+{
+    NSArray<OSTuple<OSImageId *, OSImageId *> *> *result = [[OSSimilaritySearch sharedInstance] similarImagesWithProvider:imageHashingProviderId
+                                                                                                withHashDistanceThreshold:hashDistanceThreshold
+                                                                                                                forImagesHashes:imagesHashes];
+    return result;
+}
+
 #pragma mark - Array sorting with image similarity metrics for generic NSArrays
 
 - (NSArray<id> *)sortedArrayUsingImageSimilartyComparator:(NSData *)baseImage
